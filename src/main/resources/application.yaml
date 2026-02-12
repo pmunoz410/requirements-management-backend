@@ -1,3 +1,34 @@
 spring:
   application:
     name: requirements-management-backend
+  datasource:
+    url: jdbc:mysql://localhost:3306/requirements_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root
+    password: MySQL|P@ssw0rd
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate.jdbc.time_zone: America/Lima
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQL8Dialect
+
+  sql:
+    init:
+      mode: always
+
+  jackson:
+    time-zone: America/Lima
+    serialization:
+      write-dates-as-timestamps: false
+
+security:
+  jwt:
+    secret: "bWkgY2xhdmUgZXMgbXV5IHNlZ3VyYSAxMjM0NTY3OCBhYmNkZWZn"
+    expiration: 900000
+    refresh-expiration: 86400000
+    session-days: 30

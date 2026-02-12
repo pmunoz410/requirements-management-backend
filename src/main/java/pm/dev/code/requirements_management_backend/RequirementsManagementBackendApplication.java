@@ -8,6 +8,13 @@ public class RequirementsManagementBackendApplication {
 
 	public static void main(String[] args) {
 		SpringApplication.run(RequirementsManagementBackendApplication.class, args);
+
+//		BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+//
+//		String rawPassword = "123456";
+//		String hash = encoder.encode(rawPassword);
+//
+//		System.out.println("Raw password  : " + rawPassword);
 	}
 
 }
