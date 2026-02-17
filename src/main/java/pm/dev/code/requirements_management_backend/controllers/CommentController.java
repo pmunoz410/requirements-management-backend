@@ -19,20 +19,20 @@ public class CommentController {
 
     private final ICommentService commentService;
 
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USUARIO')")
+//    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USUARIO')")
     @GetMapping
     public List<CommentResponse> getComments(@PathVariable Long requirementId) {
         return commentService.getCommentsByRequirement(requirementId);
     }
 
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USUARIO')")
+//    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USUARIO')")
     @PostMapping
     public ResponseEntity<CommentResponse> createComment(@PathVariable Long requirementId, @RequestBody CreateCommentRequest request) {
         CommentResponse created = commentService.createComment(requirementId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USUARIO')")
+//    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USUARIO')")
     @PutMapping("/{commentId}")
     public CommentResponse updateComment(@PathVariable Long requirementId, @PathVariable Long commentId, @RequestBody UpdateCommentRequest request) {
         return commentService.updateComment(requirementId, commentId, request);

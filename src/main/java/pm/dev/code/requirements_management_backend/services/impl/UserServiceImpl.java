@@ -1,15 +1,12 @@
 package pm.dev.code.requirements_management_backend.services.impl;
 
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 import pm.dev.code.requirements_management_backend.dto.users.*;
 import pm.dev.code.requirements_management_backend.entities.User;
 import pm.dev.code.requirements_management_backend.enums.Role;
+import pm.dev.code.requirements_management_backend.exceptions.business.users.*;
 import pm.dev.code.requirements_management_backend.repositories.IUserRepository;
 import pm.dev.code.requirements_management_backend.services.IUserService;
 import pm.dev.code.requirements_management_backend.utils.SecurityUtils;
@@ -29,22 +26,31 @@ public class UserServiceImpl implements IUserService {
     public List<UserResponse> getAllUsers() {
         User currentUser = securityUtils.getCurrentUser();
 
-        if (currentUser.getRol() == Role.ADMIN || currentUser.getRol() == Role.SUPER_ADMIN) {
-
-            return userRepository.findAll()
-                    .stream()
-                    .map(this::mapToResponse)
-                    .toList();
+//        if (currentUser.getRol() == Role.ADMIN || currentUser.getRol() == Role.SUPER_ADMIN) {
+//
+//            return userRepository.findAll()
+//                    .stream()
+//                    .map(this::mapToResponse)
+//                    .toList();
+//        }
+//
+//        throw new UserOperationNotAllowedException(UserErrorMessage.LIST_NOT_ALLOWED);
+        if (currentUser.getRol() != Role.ADMIN &&
+                currentUser.getRol() != Role.SUPER_ADMIN) {
+            throw new UserOperationNotAllowedException(UserErrorMessage.LIST_NOT_ALLOWED);
         }
 
-        throw new AccessDeniedException("Access denied");
+        return userRepository.findAll()
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
     }
 
     @Override
     public UserResponse getUserById(Long id) {
         User currentUser = securityUtils.getCurrentUser();
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException(UserErrorMessage.USER_NOT_FOUND));
 
         if (currentUser.getRol() == Role.ADMIN || currentUser.getRol() == Role.SUPER_ADMIN) {
             return mapToResponse(user);
@@ -54,7 +60,7 @@ public class UserServiceImpl implements IUserService {
             return mapToResponse(user);
         }
 
-        throw new AccessDeniedException("Access denied");
+        throw new UserOperationNotAllowedException(UserErrorMessage.VIEW_NOT_ALLOWED);
     }
 
     @Override
@@ -62,7 +68,7 @@ public class UserServiceImpl implements IUserService {
         User currentUser = securityUtils.getCurrentUser();
 
         if (userRepository.existsByUsername(request.username())) {
-            throw new RuntimeException("Username already exists");
+            throw new UserConflictException(UserErrorMessage.USERNAME_ALREADY_EXISTS);
         }
 
         User user = new User();
@@ -79,7 +85,7 @@ public class UserServiceImpl implements IUserService {
         } else if (currentUser.getRol() == Role.SUPER_ADMIN) {
             user.setRol(Role.ADMIN);
         } else {
-            throw new RuntimeException("You are not allowed to create users");
+            throw new UserOperationNotAllowedException(UserErrorMessage.CREATE_NOT_ALLOWED);
         }
 
         userRepository.save(user);
@@ -92,14 +98,14 @@ public class UserServiceImpl implements IUserService {
         User currentUser = securityUtils.getCurrentUser();
 
         if (currentUser.getRol() != Role.ADMIN) {
-            throw new AccessDeniedException("Only ADMIN can update users");
+            throw new UserOperationNotAllowedException(UserErrorMessage.UPDATE_NOT_ALLOWED);
         }
 
         User targetUser = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException(UserErrorMessage.USER_NOT_FOUND));
 
         if (targetUser.getRol() != Role.USUARIO) {
-            throw new AccessDeniedException("ADMIN can only update users with role USUARIO");
+            throw new UserOperationNotAllowedException(UserErrorMessage.UPDATE_NOT_ALLOWED);
         }
 
         targetUser.setFirstName(request.firstName());
@@ -119,7 +125,7 @@ public class UserServiceImpl implements IUserService {
 
         if (userRepository.existsByUsername(request.username())
                 && !currentUser.getUsername().equals(request.username())) {
-            throw new IllegalArgumentException("Username already exists");
+            throw new UserConflictException(UserErrorMessage.USERNAME_ALREADY_EXISTS);
         }
 
         currentUser.setUsername(request.username());
@@ -139,18 +145,18 @@ public class UserServiceImpl implements IUserService {
         User currentUser = securityUtils.getCurrentUser();
 
         User targetUser = userRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException(UserErrorMessage.USER_NOT_FOUND));
 
         if (targetUser.getRol() == Role.SUPER_ADMIN) {
-            throw new AccessDeniedException("SUPER_ADMIN cannot be deleted");
+            throw new UserOperationNotAllowedException(UserErrorMessage.DELETE_NOT_ALLOWED);
         }
 
         if (currentUser.getRol() == Role.ADMIN && targetUser.getRol() != Role.USUARIO) {
-            throw new AccessDeniedException("ADMIN can only delete USERS");
+            throw new UserOperationNotAllowedException(UserErrorMessage.DELETE_NOT_ALLOWED);
         }
 
         if (currentUser.getRol() != Role.ADMIN && currentUser.getRol() != Role.SUPER_ADMIN) {
-            throw new AccessDeniedException("Access denied");
+            throw new UserOperationNotAllowedException(UserErrorMessage.ACCESS_DENIED);
         }
 
         userRepository.delete(targetUser);
@@ -161,7 +167,7 @@ public class UserServiceImpl implements IUserService {
         User currentUser = securityUtils.getCurrentUser();
 
         if (!passwordEncoder.matches(request.currentPassword(), currentUser.getPassword())) {
-            throw new RuntimeException("Current password is incorrect");
+            throw new UserValidationException(UserErrorMessage.CURRENT_PASSWORD_INCORRECT);
         }
 
         currentUser.setPassword(passwordEncoder.encode(request.newPassword()));
@@ -174,20 +180,20 @@ public class UserServiceImpl implements IUserService {
         User currentUser = securityUtils.getCurrentUser();
 
         User targetUser = userRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException(UserErrorMessage.USER_NOT_FOUND));
 
         if (currentUser.getRol() == Role.ADMIN && targetUser.getRol() != Role.USUARIO) {
-            throw new AccessDeniedException("ADMIN can only reset passwords of USERS");
+            throw new UserOperationNotAllowedException(UserErrorMessage.RESET_PASSWORD_NOT_ALLOWED);
         }
 
         if (currentUser.getRol() == Role.SUPER_ADMIN) {
             if (currentUser.getId().equals(targetUser.getId())) {
-                throw new AccessDeniedException("SUPER_ADMIN cannot reset own password here");
+                throw new UserOperationNotAllowedException(UserErrorMessage.RESET_PASSWORD_NOT_ALLOWED);
             }
         }
 
         if (currentUser.getRol() != Role.ADMIN && currentUser.getRol() != Role.SUPER_ADMIN) {
-            throw new AccessDeniedException("Access denied");
+            throw new UserOperationNotAllowedException(UserErrorMessage.ACCESS_DENIED);
         }
 
         targetUser.setPassword(passwordEncoder.encode(request.newPassword()));
@@ -200,22 +206,22 @@ public class UserServiceImpl implements IUserService {
         User currentUser = securityUtils.getCurrentUser();
 
         User targetUser = userRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException(UserErrorMessage.USER_NOT_FOUND));
 
         if (targetUser.isActive()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "User is already enabled");
+            throw new UserConflictException(UserErrorMessage.USER_ALREADY_ENABLED);
         }
 
         if (targetUser.getRol() == Role.SUPER_ADMIN) {
-            throw new AccessDeniedException("SUPER_ADMIN cannot be enabled");
+            throw new UserOperationNotAllowedException(UserErrorMessage.ENABLE_NOT_ALLOWED);
         }
 
         if (currentUser.getRol() == Role.ADMIN && targetUser.getRol() != Role.USUARIO) {
-            throw new AccessDeniedException("ADMIN can only enable USERS");
+            throw new UserOperationNotAllowedException(UserErrorMessage.ENABLE_NOT_ALLOWED);
         }
 
         if (currentUser.getRol() != Role.ADMIN && currentUser.getRol() != Role.SUPER_ADMIN) {
-            throw new AccessDeniedException("Access denied");
+            throw new UserOperationNotAllowedException(UserErrorMessage.ACCESS_DENIED);
         }
 
         targetUser.setActive(true);
@@ -228,22 +234,22 @@ public class UserServiceImpl implements IUserService {
         User currentUser = securityUtils.getCurrentUser();
 
         User targetUser = userRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException(UserErrorMessage.USER_NOT_FOUND));
 
         if (!targetUser.isActive()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "User is already disabled");
+            throw new UserConflictException(UserErrorMessage.USER_ALREADY_DISABLED);
         }
 
         if (targetUser.getRol() == Role.SUPER_ADMIN) {
-            throw new AccessDeniedException("SUPER_ADMIN cannot be disabled");
+            throw new UserOperationNotAllowedException(UserErrorMessage.DISABLE_NOT_ALLOWED);
         }
 
         if (currentUser.getRol() == Role.ADMIN && targetUser.getRol() != Role.USUARIO) {
-            throw new AccessDeniedException("ADMIN can only disable USERS");
+            throw new UserOperationNotAllowedException(UserErrorMessage.DISABLE_NOT_ALLOWED);
         }
 
         if (currentUser.getRol() != Role.ADMIN && currentUser.getRol() != Role.SUPER_ADMIN) {
-            throw new AccessDeniedException("Access denied");
+            throw new UserOperationNotAllowedException(UserErrorMessage.ACCESS_DENIED);
         }
 
         targetUser.setActive(false);

@@ -1,0 +1,56 @@
+package pm.dev.code.requirements_management_backend.exceptions.base;
+
+public enum ErrorCode {
+
+    // ===== AUTH =====
+    AUTH_INVALID_CREDENTIALS("AUTH_401_001"),
+    AUTH_UNAUTHORIZED_ACCESS("AUTH_403_001"),
+    AUTH_REFRESH_NOT_ALLOWED("AUTH_403_002"),
+
+    // ===== USER =====
+    USER_ACCESS_DENIED("USER_403_001"),
+    USER_NOT_FOUND("USER_404_001"),
+    USER_CONFLICT("USER_409_001"),
+    USER_VALIDATION_ERROR("USER_400_001"),
+
+    // ===== ORGANIZATIONAL AREA =====
+    AREA_ACCESS_DENIED("AREA_403_001"),
+    AREA_NOT_FOUND("AREA_404_001"),
+    AREA_CONFLICT("AREA_409_001"),
+    AREA_VALIDATION_ERROR("AREA_400_001"),
+
+    // ===== WORKFLOW =====
+    WORKFLOW_ACCESS_DENIED("WORKFLOW_403_001"),
+    WORKFLOW_NOT_FOUND("WORKFLOW_404_001"),
+    WORKFLOW_CONFLICT("WORKFLOW_409_001"),
+    WORKFLOW_VALIDATION_ERROR("WORKFLOW_400_001"),
+
+    // ===== REQUIREMENT =====
+    REQUIREMENT_ACCESS_DENIED("REQUIREMENT_403_001"),
+    REQUIREMENT_NOT_FOUND("REQUIREMENT_404_001"),
+    REQUIREMENT_CONFLICT("REQUIREMENT_409_001"),
+    REQUIREMENT_VALIDATION_ERROR("REQUIREMENT_400_001"),
+
+    // ===== SECURITY =====
+    JWT_MISSING_TOKEN("JWT-401-001"),
+    JWT_INVALID_TOKEN("JWT-401-002"),
+    JWT_EXPIRED_TOKEN("JWT-401-003"),
+
+    // ===== SECURITY - INTERNAL =====
+    JWT_GENERATION_ERROR("JWT-500-001"),
+
+    // ===== SERVER =====
+    DB_ERROR("DB-001"),
+    EXTERNAL_SERVICE_ERROR("EXT-001"),
+    INTERNAL_ERROR("SYS-500");
+
+    private final String code;
+
+    ErrorCode(String code) {
+        this.code = code;
+    }
+
+    public String code() {
+        return code;
+    }
+}

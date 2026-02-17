@@ -1,8 +1,6 @@
 package pm.dev.code.requirements_management_backend.services.impl;
 
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import pm.dev.code.requirements_management_backend.dto.areas.CreateOrganizationalAreaRequest;
 import pm.dev.code.requirements_management_backend.dto.areas.OrganizationalAreaResponse;
@@ -10,6 +8,7 @@ import pm.dev.code.requirements_management_backend.dto.areas.UpdateOrganizationa
 import pm.dev.code.requirements_management_backend.entities.OrganizationalArea;
 import pm.dev.code.requirements_management_backend.entities.User;
 import pm.dev.code.requirements_management_backend.enums.Role;
+import pm.dev.code.requirements_management_backend.exceptions.business.areas.*;
 import pm.dev.code.requirements_management_backend.repositories.IOrganizationalAreaRepository;
 import pm.dev.code.requirements_management_backend.repositories.IUserRepository;
 import pm.dev.code.requirements_management_backend.services.IOrganizationalAreaService;
@@ -40,8 +39,8 @@ public class OrganizationalAreaServiceImpl implements IOrganizationalAreaService
             areas = organizationalAreaRepository.findByAdministrators_Id(currentUser.getId());
         }
 
-        if (areas.isEmpty()) {
-            throw new AccessDeniedException("User does not have access to organizational areas");
+        if (currentUser.getRol() != Role.SUPER_ADMIN && currentUser.getRol() != Role.ADMIN) {
+            throw new OrganizationalAreaOperationNotAllowedException(OrganizationalAreaErrorMessage.LIST_NOT_ALLOWED);
         }
 
         return areas.stream()
@@ -53,8 +52,12 @@ public class OrganizationalAreaServiceImpl implements IOrganizationalAreaService
     public OrganizationalAreaResponse getAreaById(Long id) {
         User currentUser = securityUtils.getCurrentUser();
 
+        if (currentUser.getRol() != Role.SUPER_ADMIN && currentUser.getRol() != Role.ADMIN) {
+            throw new OrganizationalAreaOperationNotAllowedException(OrganizationalAreaErrorMessage.VIEW_NOT_ALLOWED);
+        }
+
         OrganizationalArea area = organizationalAreaRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Organizational area not found"));
+                .orElseThrow(() -> new OrganizationalAreaNotFoundException(OrganizationalAreaErrorMessage.AREA_NOT_FOUND));
 
         if (currentUser.getRol() == Role.SUPER_ADMIN) {
             return mapToResponse(area);
@@ -65,7 +68,7 @@ public class OrganizationalAreaServiceImpl implements IOrganizationalAreaService
             return mapToResponse(area);
         }
 
-        throw new AccessDeniedException("Access denied to this organizational area");
+        throw new OrganizationalAreaOperationNotAllowedException(OrganizationalAreaErrorMessage.VIEW_NOT_ALLOWED);
     }
 
     @Override
@@ -73,7 +76,7 @@ public class OrganizationalAreaServiceImpl implements IOrganizationalAreaService
         User currentUser = securityUtils.getCurrentUser();
 
         if (currentUser.getRol() != Role.SUPER_ADMIN) {
-            throw new AccessDeniedException("Only SUPER_ADMIN can create organizational areas");
+            throw new OrganizationalAreaOperationNotAllowedException(OrganizationalAreaErrorMessage.CREATE_NOT_ALLOWED);
         }
 
         OrganizationalArea area = new OrganizationalArea();
@@ -90,11 +93,11 @@ public class OrganizationalAreaServiceImpl implements IOrganizationalAreaService
         User currentUser = securityUtils.getCurrentUser();
 
         if (currentUser.getRol() != Role.SUPER_ADMIN) {
-            throw new AccessDeniedException("Only SUPER_ADMIN can update organizational areas");
+            throw new OrganizationalAreaOperationNotAllowedException(OrganizationalAreaErrorMessage.UPDATE_NOT_ALLOWED);
         }
 
         OrganizationalArea area = organizationalAreaRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Organizational area not found"));
+                .orElseThrow(() -> new OrganizationalAreaNotFoundException(OrganizationalAreaErrorMessage.AREA_NOT_FOUND));
 
         area.setName(request.name());
         area.setActive(request.active());
@@ -108,11 +111,11 @@ public class OrganizationalAreaServiceImpl implements IOrganizationalAreaService
         User currentUser = securityUtils.getCurrentUser();
 
         if (currentUser.getRol() != Role.SUPER_ADMIN) {
-            throw new AccessDeniedException("Only SUPER_ADMIN can delete organizational areas");
+            throw new OrganizationalAreaOperationNotAllowedException(OrganizationalAreaErrorMessage.DELETE_NOT_ALLOWED);
         }
 
         OrganizationalArea area = organizationalAreaRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Organizational area not found"));
+                .orElseThrow(() -> new OrganizationalAreaNotFoundException(OrganizationalAreaErrorMessage.AREA_NOT_FOUND));
 
         organizationalAreaRepository.delete(area);
     }
@@ -122,24 +125,22 @@ public class OrganizationalAreaServiceImpl implements IOrganizationalAreaService
         User currentUser = securityUtils.getCurrentUser();
 
         if (currentUser.getRol() != Role.SUPER_ADMIN) {
-            throw new AccessDeniedException("Only SUPER_ADMIN can assign administrators");
+            throw new OrganizationalAreaOperationNotAllowedException(OrganizationalAreaErrorMessage.ASSIGN_ADMIN_NOT_ALLOWED);
         }
 
         OrganizationalArea area = organizationalAreaRepository.findById(areaId)
-                .orElseThrow(() -> new EntityNotFoundException("Organizational area not found"));
+                .orElseThrow(() -> new OrganizationalAreaNotFoundException(OrganizationalAreaErrorMessage.AREA_NOT_FOUND));
 
         for (Long adminId : adminIds) {
             User admin = userRepository.findById(adminId)
-                    .orElseThrow(() -> new EntityNotFoundException("Admin user not found"));
+                    .orElseThrow(() -> new OrganizationalAreaNotFoundException(OrganizationalAreaErrorMessage.ADMIN_USER_NOT_FOUND));
 
             if (admin.getRol() != Role.ADMIN) {
-                throw new IllegalArgumentException("User is not an ADMIN");
+                throw new OrganizationalAreaValidationException(OrganizationalAreaErrorMessage.USER_NOT_ADMIN_ROLE);
             }
 
             if (area.getAdministrators().contains(admin)) {
-                throw new IllegalStateException(
-                        "The administrator is already associated with this area"
-                );
+                throw new OrganizationalAreaConflictException(OrganizationalAreaErrorMessage.ADMIN_ALREADY_ASSIGNED);
             }
 
             area.getAdministrators().add(admin);
@@ -154,19 +155,17 @@ public class OrganizationalAreaServiceImpl implements IOrganizationalAreaService
         User currentUser = securityUtils.getCurrentUser();
 
         if (currentUser.getRol() != Role.SUPER_ADMIN) {
-            throw new AccessDeniedException("Only SUPER_ADMIN can remove administrators");
+            throw new OrganizationalAreaOperationNotAllowedException(OrganizationalAreaErrorMessage.REMOVE_ADMIN_NOT_ALLOWED);
         }
 
         OrganizationalArea area = organizationalAreaRepository.findById(areaId)
-                .orElseThrow(() -> new EntityNotFoundException("Organizational area not found"));
+                .orElseThrow(() -> new OrganizationalAreaNotFoundException(OrganizationalAreaErrorMessage.AREA_NOT_FOUND));
 
         User admin = userRepository.findById(adminId)
-                .orElseThrow(() -> new EntityNotFoundException("Admin user not found"));
+                .orElseThrow(() -> new OrganizationalAreaNotFoundException(OrganizationalAreaErrorMessage.ADMIN_USER_NOT_FOUND));
 
         if (!area.getAdministrators().contains(admin)) {
-            throw new IllegalStateException(
-                    "The administrator is not associated with this area"
-            );
+            throw new OrganizationalAreaConflictException(OrganizationalAreaErrorMessage.ADMIN_NOT_ASSIGNED);
         }
 
         area.getAdministrators().remove(admin);
@@ -180,26 +179,24 @@ public class OrganizationalAreaServiceImpl implements IOrganizationalAreaService
         User currentUser = securityUtils.getCurrentUser();
 
         if (currentUser.getRol() != Role.SUPER_ADMIN) {
-            throw new AccessDeniedException("Only SUPER_ADMIN can change admin area");
+            throw new OrganizationalAreaOperationNotAllowedException(OrganizationalAreaErrorMessage.CHANGE_ADMIN_AREA_NOT_ALLOWED);
         }
 
         User admin = userRepository.findById(adminId)
-                .orElseThrow(() -> new EntityNotFoundException("Admin user not found"));
+                .orElseThrow(() -> new OrganizationalAreaNotFoundException(OrganizationalAreaErrorMessage.ADMIN_USER_NOT_FOUND));
 
         if (admin.getRol() != Role.ADMIN) {
-            throw new IllegalArgumentException("User is not an ADMIN");
+            throw new OrganizationalAreaValidationException(OrganizationalAreaErrorMessage.USER_NOT_ADMIN_ROLE);
         }
 
         OrganizationalArea fromArea = organizationalAreaRepository.findById(fromAreaId)
-                .orElseThrow(() -> new EntityNotFoundException("Source area not found"));
+                .orElseThrow(() -> new OrganizationalAreaNotFoundException(OrganizationalAreaErrorMessage.AREA_NOT_FOUND));
 
         OrganizationalArea toArea = organizationalAreaRepository.findById(toAreaId)
-                .orElseThrow(() -> new EntityNotFoundException("Target area not found"));
+                .orElseThrow(() -> new OrganizationalAreaNotFoundException(OrganizationalAreaErrorMessage.AREA_NOT_FOUND));
 
         if (!fromArea.getAdministrators().contains(admin)) {
-            throw new IllegalStateException(
-                    "The administrator does not belong to the source area"
-            );
+            throw new OrganizationalAreaConflictException(OrganizationalAreaErrorMessage.ADMIN_NOT_IN_SOURCE_AREA);
         }
 
         fromArea.getAdministrators().remove(admin);
