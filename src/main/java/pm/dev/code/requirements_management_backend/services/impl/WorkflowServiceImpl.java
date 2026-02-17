@@ -1,8 +1,6 @@
 package pm.dev.code.requirements_management_backend.services.impl;
 
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import pm.dev.code.requirements_management_backend.dto.workflows.CreateWorkflowRequest;
 import pm.dev.code.requirements_management_backend.dto.workflows.UpdateWorkflowRequest;
@@ -11,6 +9,11 @@ import pm.dev.code.requirements_management_backend.entities.OrganizationalArea;
 import pm.dev.code.requirements_management_backend.entities.User;
 import pm.dev.code.requirements_management_backend.entities.Workflow;
 import pm.dev.code.requirements_management_backend.enums.Role;
+import pm.dev.code.requirements_management_backend.exceptions.business.areas.OrganizationalAreaErrorMessage;
+import pm.dev.code.requirements_management_backend.exceptions.business.areas.OrganizationalAreaNotFoundException;
+import pm.dev.code.requirements_management_backend.exceptions.business.users.UserErrorMessage;
+import pm.dev.code.requirements_management_backend.exceptions.business.users.UserNotFoundException;
+import pm.dev.code.requirements_management_backend.exceptions.business.workflows.*;
 import pm.dev.code.requirements_management_backend.repositories.IOrganizationalAreaRepository;
 import pm.dev.code.requirements_management_backend.repositories.IUserRepository;
 import pm.dev.code.requirements_management_backend.repositories.IWorkflowRepository;
@@ -35,7 +38,7 @@ public class WorkflowServiceImpl implements IWorkflowService {
 
         if (currentUser.getRol() != Role.SUPER_ADMIN
                 && currentUser.getRol() != Role.ADMIN && currentUser.getRol() != Role.USUARIO) {
-            throw new AccessDeniedException("Access denied");
+            throw new WorkflowOperationNotAllowedException(WorkflowErrorMessage.LIST_NOT_ALLOWED);
         }
 
         List<Workflow> workflows = List.of();
@@ -62,7 +65,7 @@ public class WorkflowServiceImpl implements IWorkflowService {
         User currentUser = securityUtils.getCurrentUser();
 
         Workflow workflow = workflowRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Workflow not found"));
+                .orElseThrow(() -> new WorkflowNotFoundException(WorkflowErrorMessage.WORKFLOW_NOT_FOUND));
 
         if (currentUser.getRol() == Role.SUPER_ADMIN) {
             return mapToResponse(workflow);
@@ -76,7 +79,7 @@ public class WorkflowServiceImpl implements IWorkflowService {
             return mapToResponse(workflow);
         }
 
-        throw new AccessDeniedException("Access denied to this workflow");
+        throw new WorkflowOperationNotAllowedException(WorkflowErrorMessage.VIEW_NOT_ALLOWED);
     }
 
     @Override
@@ -84,19 +87,14 @@ public class WorkflowServiceImpl implements IWorkflowService {
         User currentUser = securityUtils.getCurrentUser();
 
         if (currentUser.getRol() != Role.ADMIN) {
-            throw new AccessDeniedException("Only ADMIN can create workflows");
+            throw new WorkflowOperationNotAllowedException(WorkflowErrorMessage.CREATE_NOT_ALLOWED);
         }
 
-//        System.out.println("ROL DEL USER: " + currentUser.getRol());
-//        System.out.println("AUTH: " + SecurityContextHolder.getContext().getAuthentication().getAuthorities());
-
         OrganizationalArea area = organizationalAreaRepository.findById(request.areaId())
-                .orElseThrow(() -> new EntityNotFoundException("Área no encontrada"));
+                .orElseThrow(() -> new OrganizationalAreaNotFoundException(OrganizationalAreaErrorMessage.AREA_NOT_FOUND));
 
         if (!area.getAdministrators().contains(currentUser)) {
-            throw new AccessDeniedException(
-                    "You are not assigned to this organizational area"
-            );
+            throw new WorkflowOperationNotAllowedException(WorkflowErrorMessage.NOT_WORKFLOW_OWNER);
         }
 
         Workflow workflow = new Workflow();
@@ -105,10 +103,6 @@ public class WorkflowServiceImpl implements IWorkflowService {
         workflow.setCreatedAt(LocalDateTime.now());
         workflow.setActive(true);
         workflow.setArea(area);
-
-//        System.out.println("Usuario: " + currentUser.getUsername() + ", rol: " + currentUser.getRol());
-//        System.out.println("ID de área recibido: " + request.areaId());
-//        System.out.println("Area encontrada: " + area.getName());
 
         Workflow savedWorkflow = workflowRepository.save(workflow);
 
@@ -120,21 +114,21 @@ public class WorkflowServiceImpl implements IWorkflowService {
         User currentUser = securityUtils.getCurrentUser();
 
         if (currentUser.getRol() != Role.ADMIN) {
-            throw new AccessDeniedException("Only ADMIN can update workflows");
+            throw new WorkflowOperationNotAllowedException(WorkflowErrorMessage.UPDATE_NOT_ALLOWED);
         }
 
         Workflow workflow = workflowRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Workflow not found"));
+                .orElseThrow(() -> new WorkflowNotFoundException(WorkflowErrorMessage.WORKFLOW_NOT_FOUND));
 
         if (!workflow.getAdministrator().getId().equals(currentUser.getId())) {
-            throw new AccessDeniedException("You can only update your own workflows");
+            throw new WorkflowOperationNotAllowedException(WorkflowErrorMessage.NOT_WORKFLOW_OWNER);
         }
 
         workflow.setName(request.name());
         workflow.setActive(request.active());
 
         if (request.areaId() != null) {
-            throw new AccessDeniedException("ADMIN cannot change workflow area");
+            throw new WorkflowOperationNotAllowedException(WorkflowErrorMessage.CHANGE_AREA_NOT_ALLOWED);
         }
 
         workflow.setUpdatedAt(LocalDateTime.now());
@@ -149,14 +143,14 @@ public class WorkflowServiceImpl implements IWorkflowService {
         User currentUser = securityUtils.getCurrentUser();
 
         Workflow workflow = workflowRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Workflow not found"));
+                .orElseThrow(() -> new WorkflowNotFoundException(WorkflowErrorMessage.WORKFLOW_NOT_FOUND));
 
         if (currentUser.getRol() != Role.ADMIN) {
-            throw new AccessDeniedException("Only ADMIN can delete workflows");
+            throw new WorkflowOperationNotAllowedException(WorkflowErrorMessage.DELETE_NOT_ALLOWED);
         }
 
         if (!workflow.getAdministrator().getId().equals(currentUser.getId())) {
-            throw new AccessDeniedException("You cannot delete workflows created by another admin");
+            throw new WorkflowOperationNotAllowedException(WorkflowErrorMessage.NOT_WORKFLOW_OWNER);
         }
 
         workflowRepository.delete(workflow);
@@ -167,29 +161,30 @@ public class WorkflowServiceImpl implements IWorkflowService {
         User currentUser = securityUtils.getCurrentUser();
 
         if (currentUser.getRol() != Role.ADMIN) {
-            throw new AccessDeniedException("Only ADMIN can assign users");
+            throw new WorkflowOperationNotAllowedException(WorkflowErrorMessage.ASSIGN_USERS_NOT_ALLOWED);
         }
 
         Workflow workflow = workflowRepository.findById(workflowId)
-                .orElseThrow(() -> new EntityNotFoundException("Workflow not found"));
+                .orElseThrow(() -> new WorkflowNotFoundException(WorkflowErrorMessage.WORKFLOW_NOT_FOUND));
 
         // Admin solo puede asignar en sus workflows
         if (!workflow.getAdministrator().getId().equals(currentUser.getId())) {
-            throw new AccessDeniedException("You are not owner of this workflow");
+            throw new WorkflowOperationNotAllowedException(WorkflowErrorMessage.NOT_WORKFLOW_OWNER);
         }
 
         for (Long userId : userIds) {
             User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new EntityNotFoundException("User not found"));
+                    .orElseThrow(() -> new UserNotFoundException(UserErrorMessage.USER_NOT_FOUND));
 
             if (user.getRol() != Role.USUARIO) {
-                throw new IllegalArgumentException("Only USERS can be assigned to workflows");
+                throw new WorkflowValidationException(WorkflowErrorMessage.USER_NOT_USER_ROLE);
             }
 
-            // evita duplicados
-            if (!workflow.getUsers().contains(user)) {
-                workflow.getUsers().add(user);
+            if (workflow.getUsers().contains(user)) {
+                throw new WorkflowConflictException(WorkflowErrorMessage.USER_ALREADY_ASSIGNED);
             }
+
+            workflow.getUsers().add(user);
         }
 
         workflow.setUpdatedAt(LocalDateTime.now());
@@ -201,21 +196,21 @@ public class WorkflowServiceImpl implements IWorkflowService {
         User currentUser = securityUtils.getCurrentUser();
 
         if (currentUser.getRol() != Role.ADMIN) {
-            throw new AccessDeniedException("Only ADMIN can remove users");
+            throw new WorkflowOperationNotAllowedException(WorkflowErrorMessage.REMOVE_USERS_NOT_ALLOWED);
         }
 
         Workflow workflow = workflowRepository.findById(workflowId)
-                .orElseThrow(() -> new EntityNotFoundException("Workflow not found"));
+                .orElseThrow(() -> new WorkflowNotFoundException(WorkflowErrorMessage.WORKFLOW_NOT_FOUND));
 
         if (!workflow.getAdministrator().getId().equals(currentUser.getId())) {
-            throw new AccessDeniedException("You are not owner of this workflow");
+            throw new WorkflowOperationNotAllowedException(WorkflowErrorMessage.NOT_WORKFLOW_OWNER);
         }
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException(UserErrorMessage.USER_NOT_FOUND));
 
         if (!workflow.getUsers().contains(user)) {
-            throw new IllegalStateException("User is not assigned to this workflow");
+            throw new WorkflowConflictException(WorkflowErrorMessage.USER_NOT_ASSIGNED);
         }
 
         workflow.getUsers().remove(user);

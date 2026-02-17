@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+security:
+  jwt:
+    secret: ${JWT_SECRET_KEY}
+    expiration: ${JWT_EXPIRATION_KEY}
+    refresh-expiration: ${JWT_REFRESH_EXPIRATION}
+    session-days: ${JWT_SESSION_DAYS}
+
+app:
+  errors:
+    include-debug-info: false
